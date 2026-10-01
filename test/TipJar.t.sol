@@ -308,8 +308,8 @@ contract TipJarTest is Test {
     }
 
     function testFuzz_unicodeScalarAccepted(uint32 scalarSeed) public {
-        uint32 scalar = uint32(bound(scalarSeed, 0, 0x10ffff));
-        vm.assume(scalar < 0xd800 || scalar > 0xdfff);
+        uint32 scalar = uint32(bound(scalarSeed, 0, 0x10f7ff));
+        if (scalar >= 0xd800) scalar += 0x800;
         bytes memory encoded;
         // Encode a scalar independently of the contract's byte-oriented validation.
         if (scalar < 0x80) {
