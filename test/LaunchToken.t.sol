@@ -159,4 +159,86 @@ contract LaunchTokenTest is Test {
         assertEq(token.balanceOf(address(this)) + token.balanceOf(alice) + token.balanceOf(bob), SUPPLY);
         assertEq(token.totalSupply(), SUPPLY);
     }
+
+    function test_fullSupplyCanMoveOutAndBackThroughFiniteApproval() public {
+        token.approve(bob, SUPPLY);
+        vm.prank(bob);
+        assertTrue(token.transferFrom(address(this), alice, SUPPLY));
+        assertEq(token.balanceOf(address(this)), 0);
+        assertEq(token.balanceOf(alice), SUPPLY);
+        assertEq(token.allowance(address(this), bob), 0);
+        vm.prank(alice);
+        assertTrue(token.transfer(address(this), SUPPLY));
+        assertEq(token.balanceOf(address(this)), SUPPLY);
+        assertEq(token.balanceOf(alice), 0);
+        assertEq(token.totalSupply(), SUPPLY);
+    }
+
+    function test_maximumUintSpendCannotOverflowOrConsumeInfiniteApproval() public {
+        token.approve(bob, type(uint256).max);
+        vm.prank(bob);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IERC20Errors.ERC20InsufficientBalance.selector, address(this), SUPPLY, type(uint256).max
+            )
+        );
+        token.transferFrom(address(this), alice, type(uint256).max);
+        assertEq(token.allowance(address(this), bob), type(uint256).max);
+        assertEq(token.balanceOf(address(this)), SUPPLY);
+        assertEq(token.balanceOf(alice), 0);
+        assertEq(token.totalSupply(), SUPPLY);
+    }
+
+    function test_zeroTransferFromWithoutApprovalEmitsTransfer() public {
+        vm.expectEmit(true, true, false, true, address(token));
+        emit Transfer(address(this), alice, 0);
+        vm.prank(bob);
+        assertTrue(token.transferFrom(address(this), alice, 0));
+        assertEq(token.allowance(address(this), bob), 0);
+        assertEq(token.balanceOf(address(this)), SUPPLY);
+        assertEq(token.balanceOf(alice), 0);
+    }
+
+    /// forge-config: default.fuzz.runs = 1000
+    function testFuzz_selfTransferFromSpendsOnlyTheFiniteAllowance(uint256 approvedSeed, uint256 amountSeed) public {
+        uint256 approved = bound(approvedSeed, 0, SUPPLY);
+        uint256 amount = bound(amountSeed, 0, approved);
+        token.approve(bob, approved);
+        vm.prank(bob);
+        assertTrue(token.transferFrom(address(this), address(this), amount));
+        assertEq(token.balanceOf(address(this)), SUPPLY);
+        assertEq(token.balanceOf(bob), 0);
+        assertEq(token.allowance(address(this), bob), approved - amount);
+        assertEq(token.totalSupply(), SUPPLY);
+    }
+
+    /// forge-config: default.fuzz.runs = 1000
+    function testFuzz_invalidRecipientRollsBackFiniteAllowance(uint256 amountSeed) public {
+        uint256 amount = bound(amountSeed, 0, SUPPLY);
+        token.approve(bob, amount);
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InvalidReceiver.selector, address(0)));
+        token.transferFrom(address(this), address(0), amount);
+        assertEq(token.allowance(address(this), bob), amount);
+        assertEq(token.balanceOf(address(this)), SUPPLY);
+        assertEq(token.balanceOf(address(0)), 0);
+        assertEq(token.totalSupply(), SUPPLY);
+    }
+
+    /// forge-config: default.fuzz.runs = 1000
+    function testFuzz_arbitraryInsufficientBalanceRevertsAtomically(uint256 balanceSeed, uint256 amountSeed) public {
+        uint256 balance = bound(balanceSeed, 0, SUPPLY);
+        uint256 amount = bound(amountSeed, balance + 1, type(uint256).max);
+        token.transfer(alice, balance);
+        vm.prank(alice);
+        token.approve(bob, amount);
+        vm.prank(bob);
+        vm.expectRevert(abi.encodeWithSelector(IERC20Errors.ERC20InsufficientBalance.selector, alice, balance, amount));
+        token.transferFrom(alice, bob, amount);
+        assertEq(token.allowance(alice, bob), amount);
+        assertEq(token.balanceOf(alice), balance);
+        assertEq(token.balanceOf(bob), 0);
+        assertEq(token.balanceOf(address(this)), SUPPLY - balance);
+        assertEq(token.totalSupply(), SUPPLY);
+    }
 }
