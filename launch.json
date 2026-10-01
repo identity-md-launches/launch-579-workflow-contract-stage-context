@@ -1,0 +1,22 @@
+{
+  "kind": "evm_project",
+  "token": {
+    "contract": "LaunchToken",
+    "name": "Tip Jar",
+    "symbol": "TIPS",
+    "decimals": 18
+  },
+  "contracts": [
+    {
+      "contract": "TipJar",
+      "constructorArgs": ["$owner"]
+    }
+  ],
+  "pool": {
+    "pairedCurrency": "0x0000000000000000000000000000000000000000",
+    "fee": 3000,
+    "tickSpacing": 60,
+    "initialPrice": "79228162514264337593543950336"
+  },
+  "notes": "Intended for Sepolia. LaunchToken has no constructor arguments. TipJar accepts positive ETH tips with optional valid UTF-8 messages of at most 140 Unicode scalar values and charges no application fees. Its sole constructor argument, $owner, resolves from policy and sets the immutable withdrawal authority and recipient of the whole balance. Both constructors are nonpayable and fully configure their contracts; no initialization calls are needed. The factory supplies liquidity, MerkleDistributor and PoolInitializationGuard. Policy and signed artifact linkage belong to services. Independent review precedes service admission and deployment."
+}
